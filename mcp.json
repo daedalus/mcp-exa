@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mcp-exa": {
+      "command": "mcp-exa",
+      "env": {}
+    }
+  }
+}
