@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-exa"
-version = "0.1.0"
+version = "0.1.2"
 description = "A Python MCP server that exposes Exa search capabilities"
 readme = "README.md"
 requires-python = ">=3.11"
