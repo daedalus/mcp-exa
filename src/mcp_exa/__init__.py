@@ -1,6 +1,6 @@
 """MCP server for Exa websearch API."""
 
 __version__ = "0.1.1"
-__all__ = ["mcp", "get_exa_client"]
+__all__ = ["mcp"]
 
-from ._server import get_exa_client, mcp
+from ._server import mcp
