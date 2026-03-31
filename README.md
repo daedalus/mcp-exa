@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/mcp-exa.svg)](https://pypi.org/project/mcp-exa/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-mcp-name: io.github.dclavijo/mcp-exa
+mcp-name: io.github.daedalus/mcp-exa
 
 ## Install
 
@@ -45,7 +45,7 @@ The MCP server exposes the following Exa API methods as tools:
 ## Development
 
 ```bash
-git clone https://github.com/dclavijo/mcp-exa.git
+git clone https://github.com/daedalus/mcp-exa.git
 cd mcp-exa
 pip install -e ".[test]"
 

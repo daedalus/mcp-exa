@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.dclavijo/mcp-exa",
+  "name": "io.github.daedalus/mcp-exa",
   "description": "MCP server exposing Exa websearch API",
   "repository": {
-    "url": "https://github.com/dclavijo/mcp-exa",
+    "url": "https://github.com/daedalus/mcp-exa",
     "source": "github"
   },
   "version": "0.1.0",
