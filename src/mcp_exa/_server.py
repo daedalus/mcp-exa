@@ -1,32 +1,15 @@
-"""MCP server implementation for Exa websearch API."""
+"""MCP server implementation for Exa websearch API - uses public MCP endpoint."""
 
-import os
+import uuid
 from typing import Any, Literal, Union
 
 import fastmcp
-from exa_py import Exa
+import httpx
 from pydantic import BaseModel
 
 mcp = fastmcp.FastMCP("mcp-exa")
 
-
-def get_exa_client() -> Exa:
-    """Get an Exa client instance.
-
-    Returns:
-        Exa: An authenticated Exa client.
-
-    Raises:
-        ValueError: If the EXA_API_KEY environment variable is not set.
-    """
-    api_key = os.environ.get("EXA_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "EXA_API_KEY environment variable is not set. "
-            "Please set it before using the MCP server."
-        )
-    return Exa(api_key=api_key)
-
+BASE_URL = "https://mcp.exa.ai"
 
 ContentsOptions = Union[dict[str, Any], Literal[False]]
 SearchType = Literal["auto", "fast", "deep", "deep-reasoning", "instant"]
@@ -42,6 +25,48 @@ Category = Literal[
 ]
 ResearchModel = Literal["exa-research-fast", "exa-research", "exa-research-pro"]
 JSONSchemaInput = dict[str, Any]
+
+
+async def _call_mcp_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Call a tool on the public Exa MCP server."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": tool_name,
+            "arguments": arguments,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{BASE_URL}/mcp",
+            json=request,
+            headers={
+                "accept": "application/json, text/event-stream",
+                "content-type": "application/json",
+            },
+        )
+        response.raise_for_status()
+        response_text = response.text
+
+        lines = response_text.split("\n")
+        for line in lines:
+            if line.startswith("data: "):
+                data = line[6:]
+                result = {"jsonrpc": "2.0", "id": 1, "result": {}}
+                try:
+                    parsed = eval(data)
+                except Exception:
+                    pass
+                else:
+                    if "result" in parsed and parsed["result"].get("content"):
+                        return {
+                            "results": parsed["result"]["content"][0].get("text", "")
+                        }
+
+        return {"results": ""}
 
 
 @mcp.tool()
@@ -94,50 +119,52 @@ def search(
         >>> search("hottest AI startups", num_results=5)
         {"results": [{"title": "...", "url": "..."}]}
     """
+    import asyncio
+
     if not query:
         raise ValueError("Query cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"query": query}
     if num_results is not None:
-        kwargs["num_results"] = num_results
+        arguments["numResults"] = num_results
     if contents is not None:
-        kwargs["contents"] = contents
+        arguments["contents"] = contents
     if include_domains is not None:
-        kwargs["include_domains"] = include_domains
+        arguments["include_domains"] = include_domains
     if exclude_domains is not None:
-        kwargs["exclude_domains"] = exclude_domains
+        arguments["exclude_domains"] = exclude_domains
     if start_crawl_date is not None:
-        kwargs["start_crawl_date"] = start_crawl_date
+        arguments["start_crawl_date"] = start_crawl_date
     if end_crawl_date is not None:
-        kwargs["end_crawl_date"] = end_crawl_date
+        arguments["end_crawl_date"] = end_crawl_date
     if start_published_date is not None:
-        kwargs["start_published_date"] = start_published_date
+        arguments["start_published_date"] = start_published_date
     if end_published_date is not None:
-        kwargs["end_published_date"] = end_published_date
+        arguments["end_published_date"] = end_published_date
     if include_text is not None:
-        kwargs["include_text"] = include_text
+        arguments["include_text"] = include_text
     if exclude_text is not None:
-        kwargs["exclude_text"] = exclude_text
+        arguments["exclude_text"] = exclude_text
     if type is not None:
-        kwargs["type"] = type
+        arguments["type"] = type
     if category is not None:
-        kwargs["category"] = category
+        arguments["category"] = category
     if flags is not None:
-        kwargs["flags"] = flags
+        arguments["flags"] = flags
     if moderation is not None:
-        kwargs["moderation"] = moderation
+        arguments["moderation"] = moderation
     if user_location is not None:
-        kwargs["user_location"] = user_location
+        arguments["user_location"] = user_location
     if additional_queries is not None:
-        kwargs["additional_queries"] = additional_queries
+        arguments["additional_queries"] = additional_queries
     if output_schema is not None:
-        kwargs["output_schema"] = output_schema
+        arguments["output_schema"] = output_schema
 
     try:
-        result = exa.search(query, **kwargs)
-        return {"results": result.results}
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("web_search_exa", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -184,42 +211,44 @@ def find_similar(
         >>> find_similar("https://example.com", num_results=5)
         {"results": [{"title": "...", "url": "..."}]}
     """
+    import asyncio
+
     if not url:
         raise ValueError("URL cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"url": url}
     if num_results is not None:
-        kwargs["num_results"] = num_results
+        arguments["numResults"] = num_results
     if contents is not None:
-        kwargs["contents"] = contents
+        arguments["contents"] = contents
     if include_domains is not None:
-        kwargs["include_domains"] = include_domains
+        arguments["include_domains"] = include_domains
     if exclude_domains is not None:
-        kwargs["exclude_domains"] = exclude_domains
+        arguments["exclude_domains"] = exclude_domains
     if start_crawl_date is not None:
-        kwargs["start_crawl_date"] = start_crawl_date
+        arguments["start_crawl_date"] = start_crawl_date
     if end_crawl_date is not None:
-        kwargs["end_crawl_date"] = end_crawl_date
+        arguments["end_crawl_date"] = end_crawl_date
     if start_published_date is not None:
-        kwargs["start_published_date"] = start_published_date
+        arguments["start_published_date"] = start_published_date
     if end_published_date is not None:
-        kwargs["end_published_date"] = end_published_date
+        arguments["end_published_date"] = end_published_date
     if include_text is not None:
-        kwargs["include_text"] = include_text
+        arguments["include_text"] = include_text
     if exclude_text is not None:
-        kwargs["exclude_text"] = exclude_text
+        arguments["exclude_text"] = exclude_text
     if exclude_source_domain is not None:
-        kwargs["exclude_source_domain"] = exclude_source_domain
+        arguments["exclude_source_domain"] = exclude_source_domain
     if category is not None:
-        kwargs["category"] = category
+        arguments["category"] = category
     if flags is not None:
-        kwargs["flags"] = flags
+        arguments["flags"] = flags
 
     try:
-        result = exa.find_similar(url, **kwargs)
-        return {"results": result.results}
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_find_similar", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -238,17 +267,21 @@ def get_contents(urls: str | list[str]) -> dict[str, Any]:
         >>> get_contents(["https://example.com/article1", "https://example.com/article2"])
         {"results": [{"url": "...", "title": "...", "text": "..."}]}
     """
+    import asyncio
+
     if not urls:
         raise ValueError("URLs cannot be empty")
 
     if isinstance(urls, str):
         urls = [urls]
 
-    exa = get_exa_client()
+    arguments: dict[str, Any] = {"urls": urls}
 
     try:
-        result = exa.get_contents(urls)
-        return {"results": result.results}
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_get_contents", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -279,41 +312,28 @@ def answer(
         >>> answer("What is the capital of France?")
         {"answer": "Paris", "citations": [...]}
     """
+    import asyncio
+
     if not query:
         raise ValueError("Query cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"query": query}
     if text is not None:
-        kwargs["text"] = text
+        arguments["text"] = text
     if system_prompt is not None:
-        kwargs["system_prompt"] = system_prompt
+        arguments["system_prompt"] = system_prompt
     if model is not None:
-        kwargs["model"] = model
+        arguments["model"] = model
     if output_schema is not None:
-        kwargs["output_schema"] = output_schema
+        arguments["output_schema"] = output_schema
     if user_location is not None:
-        kwargs["user_location"] = user_location
+        arguments["user_location"] = user_location
 
     try:
-        result = exa.answer(query, **kwargs)
-        return {
-            "answer": result.answer,  # type: ignore[union-attr]
-            "citations": [
-                {
-                    "id": c.id,
-                    "url": c.url,
-                    "title": c.title,
-                    "published_date": c.published_date,
-                    "author": c.author,
-                    "text": c.text,
-                }
-                for c in result.citations  # type: ignore[union-attr]
-            ]
-            if result.citations  # type: ignore[union-attr]
-            else [],
-        }
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_answer", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -347,41 +367,21 @@ async def stream_answer(
     if not query:
         raise ValueError("Query cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"query": query}
     if text is not None:
-        kwargs["text"] = text
+        arguments["text"] = text
     if system_prompt is not None:
-        kwargs["system_prompt"] = system_prompt
+        arguments["system_prompt"] = system_prompt
     if model is not None:
-        kwargs["model"] = model
+        arguments["model"] = model
     if output_schema is not None:
-        kwargs["output_schema"] = output_schema
+        arguments["output_schema"] = output_schema
     if user_location is not None:
-        kwargs["user_location"] = user_location
+        arguments["user_location"] = user_location
 
     try:
-        stream = exa.stream_answer(query, **kwargs)
-        results = []
-        async for chunk in stream:  # type: ignore[attr-defined]
-            results.append(
-                {
-                    "content": chunk.content,
-                    "citations": [
-                        {
-                            "id": c.id,
-                            "url": c.url,
-                            "title": c.title,
-                            "published_date": c.published_date,
-                            "author": c.author,
-                            "text": c.text,
-                        }
-                        for c in (chunk.citations or [])
-                    ],
-                }
-            )
-        return results
+        result = await _call_mcp_tool("exa_stream_answer", arguments)
+        return [result]
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -406,25 +406,22 @@ def research_create(
         >>> research_create(instructions="What is the latest valuation of SpaceX?")
         {"research_id": "abc-123", "status": "running"}
     """
+    import asyncio
+
     if not instructions:
         raise ValueError("Instructions cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"instructions": instructions}
     if model is not None:
-        kwargs["model"] = model
+        arguments["model"] = model
     if output_schema is not None:
-        kwargs["output_schema"] = output_schema
+        arguments["output_schema"] = output_schema
 
     try:
-        result = exa.research.create(instructions=instructions, **kwargs)
-        return {
-            "research_id": result.research_id,
-            "status": result.status,
-            "created_at": result.created_at,
-            "model": result.model,
-        }
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_research_create", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -449,35 +446,22 @@ def research_get(
         >>> research_get("abc-123")
         {"research_id": "abc-123", "status": "completed", "output": {...}}
     """
+    import asyncio
+
     if not research_id:
         raise ValueError("Research ID cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"research_id": research_id}
     if events is not None:
-        kwargs["events"] = events
+        arguments["events"] = events
     if output_schema is not None:
-        kwargs["output_schema"] = output_schema
+        arguments["output_schema"] = output_schema
 
     try:
-        result = exa.research.get(research_id, **kwargs)
-        return {
-            "research_id": result.research_id,
-            "status": result.status,
-            "created_at": result.created_at,
-            "finished_at": result.finished_at,
-            "model": result.model,
-            "output": result.output,
-            "cost_dollars": (
-                {
-                    "neural": result.cost_dollars.neural,
-                    "keyword": result.cost_dollars.keyword,
-                }
-                if result.cost_dollars
-                else None
-            ),
-        }
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_research_get", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -506,39 +490,26 @@ def research_poll_until_finished(
         >>> research_poll_until_finished("abc-123")
         {"research_id": "abc-123", "status": "completed", "output": {...}}
     """
+    import asyncio
+
     if not research_id:
         raise ValueError("Research ID cannot be empty")
 
-    exa = get_exa_client()
-
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {"research_id": research_id}
     if poll_interval is not None:
-        kwargs["poll_interval"] = poll_interval
+        arguments["poll_interval"] = poll_interval
     if timeout_ms is not None:
-        kwargs["timeout_ms"] = timeout_ms
+        arguments["timeout_ms"] = timeout_ms
     if events is not None:
-        kwargs["events"] = events
+        arguments["events"] = events
     if output_schema is not None:
-        kwargs["output_schema"] = output_schema
+        arguments["output_schema"] = output_schema
 
     try:
-        result = exa.research.poll_until_finished(research_id, **kwargs)
-        return {
-            "research_id": result.research_id,
-            "status": result.status,
-            "created_at": result.created_at,
-            "finished_at": result.finished_at,
-            "model": result.model,
-            "output": result.output,
-            "cost_dollars": (
-                {
-                    "neural": result.cost_dollars.neural,
-                    "keyword": result.cost_dollars.keyword,
-                }
-                if result.cost_dollars
-                else None
-            ),
-        }
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_research_poll_until_finished", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}
 
@@ -561,29 +532,18 @@ def research_list(
         >>> research_list(limit=10)
         {"data": [...], "has_more": true, "next_cursor": "..."}
     """
-    exa = get_exa_client()
+    import asyncio
 
-    kwargs: dict[str, Any] = {}
+    arguments: dict[str, Any] = {}
     if cursor is not None:
-        kwargs["cursor"] = cursor
+        arguments["cursor"] = cursor
     if limit is not None:
-        kwargs["limit"] = limit
+        arguments["limit"] = limit
 
     try:
-        result = exa.research.list(**kwargs)
-        return {
-            "data": [
-                {
-                    "id": r.id,  # type: ignore[union-attr]
-                    "status": r.status,
-                    "instructions": r.instructions,
-                    "created_at": r.created_at,
-                    "model": r.model,
-                }
-                for r in result.data
-            ],
-            "has_more": result.has_more,
-            "next_cursor": result.next_cursor,
-        }
+        result = asyncio.get_event_loop().run_until_complete(
+            _call_mcp_tool("exa_research_list", arguments)
+        )
+        return result
     except Exception as e:
         return {"error": str(e)}

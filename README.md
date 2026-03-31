@@ -16,13 +16,34 @@ pip install mcp-exa
 
 ## Usage
 
-### Set up your API key
+### Option 1: Using the public MCP endpoint (no API key required)
+
+You can use Exa search without an API key by connecting to the public MCP endpoint:
+
+```json
+{
+  "mcpServers": {
+    "exa": {
+      "url": "https://mcp.exa.ai/mcp"
+    }
+  }
+}
+```
+
+This endpoint provides the following tools:
+- `web_search_exa` - Perform a web search
+
+### Option 2: Running locally with your own API key
+
+If you want to use the full Exa API with your own API key, install the package and run it locally.
+
+#### Set up your API key
 
 ```bash
 export EXA_API_KEY="your-api-key"
 ```
 
-### Run as MCP server
+#### Run as MCP server
 
 ```bash
 mcp-exa
