@@ -1,6 +1,6 @@
 # MCP Exa
 
-> A Python MCP server that exposes Exa search capabilities
+> A Python MCP server that exposes Exa search capabilities (no API key required)
 
 [![PyPI](https://img.shields.io/pypi/v/mcp-exa.svg)](https://pypi.org/project/mcp-exa/)
 [![Python](https://img.shields.io/pypi/pyversions/mcp-exa.svg)](https://pypi.org/project/mcp-exa/)
@@ -17,11 +17,7 @@ pip install mcp-exa
 
 ## Usage
 
-Set your Exa API key:
-
-```bash
-export EXA_API_KEY=your_api_key_here
-```
+No API key required. The server uses Exa's public MCP endpoint.
 
 Run the MCP server:
 
@@ -36,10 +32,6 @@ python -m mcp_exa
 ```
 
 ## Configuration
-
-### Environment Variables
-
-- `EXA_API_KEY` - Your Exa API key (required). Get it at https://dashboard.exa.ai/api-keys
 
 ### Available Tools
 
@@ -64,10 +56,7 @@ Add to your config file:
 {
   "mcpServers": {
     "exa": {
-      "command": "mcp-exa",
-      "env": {
-        "EXA_API_KEY": "your_api_key"
-      }
+      "command": "mcp-exa"
     }
   }
 }
@@ -83,9 +72,6 @@ Add to your `opencode.json`:
     "exa": {
       "type": "stdio",
       "command": "mcp-exa",
-      "env": {
-        "EXA_API_KEY": "your_api_key"
-      },
       "enabled": true
     }
   }

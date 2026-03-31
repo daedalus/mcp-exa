@@ -9,18 +9,17 @@ import httpx
 mcp = fastmcp.FastMCP("mcp-exa")
 
 EXA_API_BASE = "https://api.exa.ai"
+EXA_MCP_BASE = "https://mcp.exa.ai"
 
 
-def get_api_key() -> str:
+def get_api_key() -> str | None:
     """Get Exa API key from environment variable."""
-    api_key = os.environ.get("EXA_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "EXA_API_KEY environment variable is not set. "
-            "Please set it with your Exa API key. "
-            "Get your API key at https://dashboard.exa.ai/api-keys"
-        )
-    return api_key
+    return os.environ.get("EXA_API_KEY")
+
+
+def use_public_endpoint() -> bool:
+    """Check if public MCP endpoint should be used instead of API key."""
+    return os.environ.get("MCP_EXA_PUBLIC", "").lower() in ("1", "true", "yes")
 
 
 async def _make_request(
@@ -29,6 +28,12 @@ async def _make_request(
 ) -> dict[str, Any]:
     """Make request to Exa API."""
     api_key = get_api_key()
+    if not api_key:
+        raise ValueError(
+            "EXA_API_KEY environment variable is not set. "
+            "Please set it with your Exa API key. "
+            "Get your API key at https://dashboard.exa.ai/api-keys"
+        )
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{EXA_API_BASE}/{endpoint}",
@@ -40,6 +45,48 @@ async def _make_request(
         )
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
+
+
+async def _call_mcp_tool(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Call a tool on the public Exa MCP server."""
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {
+            "name": tool_name,
+            "arguments": arguments,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{EXA_MCP_BASE}/mcp",
+            json=request,
+            headers={
+                "accept": "application/json, text/event-stream",
+                "content-type": "application/json",
+            },
+        )
+        response.raise_for_status()
+        response_text = response.text
+
+        lines = response_text.split("\n")
+        for line in lines:
+            if line.startswith("data: "):
+                data = line[6:]
+                result = {"jsonrpc": "2.0", "id": 1, "result": {}}
+                try:
+                    parsed = eval(data)
+                except Exception:
+                    pass
+                else:
+                    if "result" in parsed and parsed["result"].get("content"):
+                        return {
+                            "results": parsed["result"]["content"][0].get("text", "")
+                        }
+
+        return {"results": ""}
 
 
 @mcp.tool()
@@ -79,6 +126,8 @@ async def web_search_exa(
         payload["summaryQuery"] = summary_query
         payload["enableSummary"] = True
 
+    if use_public_endpoint():
+        return await _call_mcp_tool("web_search_exa", payload)
     return await _make_request("search", payload)
 
 
@@ -108,6 +157,8 @@ async def get_code_context_exa(
         "tokensNum": tokens_num,
     }
 
+    if use_public_endpoint():
+        return await _call_mcp_tool("get_code_context_exa", payload)
     return await _make_request("search", payload)
 
 
@@ -144,6 +195,8 @@ async def crawling_exa(
     if text_max_characters > 0:
         payload["textMaxCharacters"] = text_max_characters
 
+    if use_public_endpoint():
+        return await _call_mcp_tool("crawling_exa", payload)
     return await _make_request("crawl", payload)
 
 
@@ -234,4 +287,6 @@ async def web_search_advanced_exa(
         if highlights_query:
             payload["highlightsQuery"] = highlights_query
 
+    if use_public_endpoint():
+        return await _call_mcp_tool("web_search_advanced_exa", payload)
     return await _make_request("search", payload)

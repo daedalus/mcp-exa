@@ -1,4 +1,9 @@
 from mcp_exa import mcp
 
+
+def main():
+    mcp.run(transport="stdio")
+
+
 if __name__ == "__main__":
-    mcp.run()
+    main()

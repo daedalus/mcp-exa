@@ -37,8 +37,7 @@ class TestGetApiKey:
 
     def test_get_api_key_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("EXA_API_KEY", raising=False)
-        with pytest.raises(ValueError, match="EXA_API_KEY"):
-            get_api_key()
+        assert get_api_key() is None
 
 
 class TestWebSearchExa:
